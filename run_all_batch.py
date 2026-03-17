@@ -174,18 +174,12 @@ def main(args):
     total = 0
     skipped = 0
     for run_id, (class_name, raw_img_path) in enumerate(iter_samples(runned_data)):
-        resolved_path = resolve_image_path(raw_img_path, class_name, args)
-        if resolved_path is None:
-            skipped += 1
-            print(f"[SKIP] cannot resolve image path: {raw_img_path}")
-            continue
-
-        img_name = os.path.splitext(os.path.basename(resolved_path))[0]
+        img_name = os.path.splitext(os.path.basename(raw_img_path))[0]
         sample_dir = os.path.join(args.output_dir, class_name, img_name)
         os.makedirs(sample_dir, exist_ok=True)
 
         print(f"[{run_id}] class={class_name} image={img_name}")
-        img = Image.open(resolved_path).convert("RGB")
+        img = Image.open(raw_img_path).convert("RGB")
         x_tensor = spatial_transform(img)
         x_test = x_tensor.permute(1, 2, 0).numpy()
 
@@ -264,7 +258,7 @@ def main(args):
                 {
                     "class_name": class_name,
                     "input_path_raw": raw_img_path,
-                    "input_path_resolved": resolved_path,
+                    "input_path_resolved": raw_img_path,
                     "true_label": int(result.get("true_label", -1)),
                     "success": bool(result.get("success", False)),
                     "queries": int(result.get("queries", -1)),
