@@ -14,6 +14,7 @@ from util import (
     get_torchvision_model
 )
 import argparse
+import itertools
 import json
 import os
 
@@ -173,7 +174,10 @@ def main(args):
 
     total = 0
     skipped = 0
-    for run_id, (class_name, raw_img_path) in enumerate(iter_samples(runned_data)):
+    samples = iter_samples(runned_data)
+    if args.max_samples is not None:
+        samples = itertools.islice(samples, args.max_samples)
+    for run_id, (class_name, raw_img_path) in enumerate(samples):
         img_name = os.path.splitext(os.path.basename(raw_img_path))[0]
         sample_dir = os.path.join(args.output_dir, class_name, img_name)
         os.makedirs(sample_dir, exist_ok=True)
@@ -302,6 +306,7 @@ if __name__ == "__main__":
                         help="optional source prefix to replace in JSON paths")
     parser.add_argument("--path_prefix_to", type=str, default=None,
                         help="optional destination prefix for replaced path")
+    parser.add_argument("--max_samples", type=int, default=None, help="optional limit on number of samples to process (default: run all)")
 
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--print_every", type=int, default=10)
