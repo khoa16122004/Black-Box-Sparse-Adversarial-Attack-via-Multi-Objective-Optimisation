@@ -60,7 +60,40 @@ class UnTargeted:
         preds[self.true] = -math.inf
 
         f_other = math.log(math.exp(max(preds)) + 1e-30)
-        return [is_adversarial, float(f_true - f_other)]
+        # return [is_adversarial, float(f_true - f_other)]
+        return [is_adversarial, float(f_other - f_true)]
+
+    def batch(self, imgs):
+        imgs = np.asarray(imgs, dtype=np.float32)
+        if self.unormalize:
+            imgs = imgs * 255.
+
+        if self.to_pytorch:
+            x = torch.from_numpy(imgs).permute(0, 3, 1, 2)
+            preds = self.model.predict(x)
+            if isinstance(preds, torch.Tensor):
+                preds_t = preds.detach().cpu()
+            else:
+                preds_t = torch.from_numpy(np.asarray(preds))
+
+            y = torch.argmax(preds_t, dim=1)
+            true_scores = preds_t[:, self.true]
+            masked = preds_t.clone()
+            masked[:, self.true] = -torch.inf
+            other_scores = torch.max(masked, dim=1).values
+            margins = other_scores - true_scores
+
+            return [[bool(y[i].item() != self.true), float(margins[i].item())] for i in range(preds_t.shape[0])]
+
+        preds = self.model.predict(imgs)
+        preds = np.asarray(preds)
+        y = np.argmax(preds, axis=1)
+        true_scores = preds[:, self.true]
+        masked = preds.copy()
+        masked[:, self.true] = -np.inf
+        other_scores = np.max(masked, axis=1)
+        margins = other_scores - true_scores
+        return [[bool(y[i] != self.true), float(margins[i])] for i in range(preds.shape[0])]
 
 
 class Targeted:
@@ -114,3 +147,30 @@ class Targeted:
 
         f_other = math.log(sum(math.exp(pi) for pi in preds))
         return [is_adversarial, f_other - f_target]
+
+    def batch(self, imgs):
+        imgs = np.asarray(imgs, dtype=np.float32)
+        if self.unormalize:
+            imgs = imgs * 255.
+
+        if self.to_pytorch:
+            x = torch.from_numpy(imgs).permute(0, 3, 1, 2)
+            preds = self.model.predict(x)
+            if isinstance(preds, torch.Tensor):
+                preds_t = preds.detach().cpu()
+            else:
+                preds_t = torch.from_numpy(np.asarray(preds))
+
+            y = torch.argmax(preds_t, dim=1)
+            f_target = preds_t[:, self.target]
+            f_other = torch.logsumexp(preds_t, dim=1)
+            vals = f_other - f_target
+            return [[bool(y[i].item() == self.target), float(vals[i].item())] for i in range(preds_t.shape[0])]
+
+        preds = self.model.predict(imgs)
+        preds = np.asarray(preds)
+        y = np.argmax(preds, axis=1)
+        f_target = preds[:, self.target]
+        f_other = np.log(np.sum(np.exp(preds), axis=1) + 1e-30)
+        vals = f_other - f_target
+        return [[bool(y[i] == self.target), float(vals[i])] for i in range(preds.shape[0])]

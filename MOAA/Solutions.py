@@ -1,6 +1,7 @@
 import numpy as np
 from copy import deepcopy
 from operator import attrgetter
+from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 
 
 class Solution:
@@ -33,14 +34,16 @@ class Solution:
 
         return np.clip(x_adv, 0, 1)
 
-    def evaluate(self, loss_function, include_dist):
+    def evaluate(self, loss_function, include_dist, objective2_fn=None):
         img_adv = self.generate_image()
         fs = loss_function(img_adv)
         self.is_adversarial = fs[0]  # Assume first element is boolean always
         self.fitnesses = fs[1:]
         if include_dist:
-            dist = self.euc_distance(img_adv)
-            self.fitnesses.append(dist)
+            if objective2_fn is None:
+                raise ValueError("objective2_fn is required: L2 objective has been removed")
+            obj2 = float(objective2_fn(img_adv))
+            self.fitnesses.append(obj2)
         else:
             self.fitnesses.append(0)
 
@@ -48,43 +51,24 @@ class Solution:
         self.loss = fs[1]
 
     def dominates(self, soln):
-        if self.is_adversarial is True and soln.is_adversarial is False:
-            return True
-
-        if self.is_adversarial is False and soln.is_adversarial is True:
-            return False
-
-        if self.is_adversarial is True and soln.is_adversarial is True:
-            return True if self.fitnesses[1] < soln.fitnesses[1] else False
-
-        if self.is_adversarial is False and soln.is_adversarial is False:
-            return True if self.fitnesses[0] < soln.fitnesses[0] else False
+        # Standard Pareto dominance (minimization): no worse on all objectives
+        # and strictly better on at least one objective.
+        return bool(np.all(self.fitnesses <= soln.fitnesses) and np.any(self.fitnesses < soln.fitnesses))
 
 
 def fast_nondominated_sort(population):
-    fronts = [[]]
-    for individual in population:
-        individual.domination_count = 0
-        individual.dominated_solutions = []
-        for other_individual in population:
-            if individual.dominates(other_individual):
-                individual.dominated_solutions.append(other_individual)
-            elif other_individual.dominates(individual):
-                individual.domination_count += 1
-        if individual.domination_count == 0:
-            individual.rank = 0
-            fronts[0].append(individual)
-    i = 0
-    while len(fronts[i]) > 0:
-        temp = []
-        for individual in fronts[i]:
-            for other_individual in individual.dominated_solutions:
-                other_individual.domination_count -= 1
-                if other_individual.domination_count == 0:
-                    other_individual.rank = i + 1
-                    temp.append(other_individual)
-        i = i + 1
-        fronts.append(temp)
+    if len(population) == 0:
+        return []
+
+    F = np.array([individual.fitnesses for individual in population], dtype=float)
+    front_indices = NonDominatedSorting().do(F)
+
+    fronts = []
+    for rank, idxs in enumerate(front_indices):
+        front = [population[i] for i in idxs]
+        for individual in front:
+            individual.rank = rank
+        fronts.append(front)
 
     return fronts
 
