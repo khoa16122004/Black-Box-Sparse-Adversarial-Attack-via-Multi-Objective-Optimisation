@@ -317,7 +317,7 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--print_every", type=int, default=10)
 
-    parser.add_argument("--attack_algo", type=str, default="moaa", choices=[
+    parser.add_argument("--attack_algo", type=str, default="boaa", choices=[
         "boaa",
         "flexl0_boaa",
         'tripoaa'

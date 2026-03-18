@@ -288,7 +288,7 @@ class Attack_Flexible_L0(Attack): # the attack that having different l0 of each 
             for front in population.fronts:
                 calculate_crowding_distance(front)
             parents = tournament_selection(population.population, self.params["tournament_size"])
-            children = generate_offspring(parents,
+            children = generate_offspring_flexible(parents,
                                           self.params["pc"],
                                           pm,
                                           all_pixels,

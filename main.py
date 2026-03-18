@@ -1,5 +1,5 @@
 # from ProposedMethod.QueryEfficient.Scratch import Attack
-from MOAA.MOAA import Attack
+from MOAA.MOAA import Attack_Flexible_L0
 from LossFunctions import UnTargeted, Targeted
 import numpy as np
 import argparse
@@ -410,7 +410,7 @@ if __name__ == "__main__":
         "print_every": args.print_every,
         "objective2_fn": objective2_fn,
     }
-    attack = Attack(params)
+    attack = Attack_Flexible_L0(params)
     attack.attack(loss)
 
     if args.visualize:
