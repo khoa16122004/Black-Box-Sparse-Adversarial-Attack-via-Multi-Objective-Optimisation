@@ -1,4 +1,4 @@
-from MOAA.MOAA import Attack
+from MOAA.MOAA import Attack, Attack_Flexible_L0
 from LossFunctions import UnTargeted, Targeted
 import numpy as np
 import argparse
@@ -225,7 +225,13 @@ def main(args):
             "objective2_fn": objective2_fn,
         }
 
-        attack = Attack(params)
+        if args.attack_algo == "boaa":
+            attack = Attack(params)
+        elif args.attack_algo == "flexl0_boaa":
+            attack = Attack_Flexible_L0(params)
+        else:
+            raise ValueError(f"Unsupported attack_algo: {args.attack_algo}")
+
         attack.attack(loss)
 
         result = np.load(result_path, allow_pickle=True).item()
@@ -310,6 +316,12 @@ if __name__ == "__main__":
 
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--print_every", type=int, default=10)
+
+    parser.add_argument("--attack_algo", type=str, default="moaa", choices=[
+        "boaa",
+        "flexl0_boaa",
+        'tripoaa'
+    ])
 
     main(parser.parse_args())
 

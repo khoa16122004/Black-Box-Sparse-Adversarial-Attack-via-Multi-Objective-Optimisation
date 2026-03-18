@@ -27,6 +27,9 @@ class Solution:
     def euc_distance(self, img):
         return np.sum((img - self.x.copy()) ** 2)
 
+    def l0_distance(self, img):
+        return np.sum(np.any(img != self.x.copy(), axis=-1))
+
     def generate_image(self):
         x_adv = self.x.copy()
         for i in range(self.delta):
@@ -49,6 +52,7 @@ class Solution:
 
         self.fitnesses = np.array(self.fitnesses)
         self.loss = fs[1]
+        self.l0 = self.l0_distance(img_adv)
 
     def dominates(self, soln):
         # Standard Pareto dominance (minimization): no worse on all objectives
