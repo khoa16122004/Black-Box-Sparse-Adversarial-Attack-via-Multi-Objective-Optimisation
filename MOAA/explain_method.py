@@ -86,7 +86,12 @@ def integrated_gradients(model, input_tensor, target_class=None, steps=100, base
     return saliency.detach(), output_logits
 
 
-def _vit_reshape_transform(tensor, height=14, width=14):
+def _vit_reshape_transform(tensor, model_name):
+    if model_name == "vit_b_32"
+        height = width = 7
+    elif model_name == "vit_b_16":
+        height = width = 14
+
     tensor = tensor[:, 1:, :]
     tensor = tensor.reshape(tensor.size(0), height, width, tensor.size(2))
     return tensor.permute(0, 3, 1, 2)
