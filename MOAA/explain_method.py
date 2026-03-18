@@ -105,6 +105,8 @@ def _vit_reshape_transform(tensor, height: Optional[int] = None, width: Optional
             )
         height = side
         width = side
+        print(f"Inferred ViT grid size: {height}x{width} from {num_tokens} tokens")
+        raise
     elif height is None:
         if width is None or width <= 0 or num_tokens % width != 0:
             raise ValueError(f"Invalid width={width} for {num_tokens} tokens")
