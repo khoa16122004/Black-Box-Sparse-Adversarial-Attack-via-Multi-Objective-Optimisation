@@ -8,6 +8,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+def discover_pairs_in_folder(folder: Path) -> List[Tuple[Path, Path]]:
+    """Find sample folders under a single method folder that contain both result files."""
+    pairs: List[Tuple[Path, Path]] = []
+    for objective_path in folder.rglob("objective_mins.txt"):
+        rank_path = objective_path.with_name("rank0_scores.txt")
+        if rank_path.exists():
+            pairs.append((objective_path, rank_path))
+    return pairs
+
+
 def discover_pairs_by_method(roots: List[Path]) -> Dict[str, List[Tuple[Path, Path]]]:
     """Find sample folders that contain both objective_mins and rank0_scores, grouped by method."""
     method_to_pairs: Dict[str, List[Tuple[Path, Path]]] = {}
@@ -22,6 +32,23 @@ def discover_pairs_by_method(roots: List[Path]) -> Dict[str, List[Tuple[Path, Pa
                 method_name = parts[0] if len(parts) > 1 else root.name
                 method_to_pairs.setdefault(method_name, []).append((objective_path, rank_path))
     return method_to_pairs
+
+
+def infer_model_and_method(method_folder: Path) -> Tuple[str, str, str]:
+    """Infer model name, explain method, and summary key from output/<model>/<method>."""
+    if not method_folder.exists():
+        raise FileNotFoundError(f"Input folder does not exist: {method_folder}")
+    if not method_folder.is_dir():
+        raise NotADirectoryError(f"Input path is not a folder: {method_folder}")
+
+    model_name = method_folder.parent.name
+    explain_method = method_folder.name
+    if not model_name:
+        raise ValueError(
+            "Could not infer model name from input folder. Expected path like output/<model>/<method>."
+        )
+
+    return model_name, explain_method, f"{model_name}_{explain_method}"
 
 
 def read_objective_mins(path: Path) -> np.ndarray:
@@ -209,6 +236,19 @@ def choose_best_rank0_candidate(rank_data: np.ndarray) -> Optional[Dict[str, flo
     }
 
 
+def build_mean_best_candidate(sample_best_rows: List[Dict[str, object]]) -> Optional[Dict[str, float]]:
+    if not sample_best_rows:
+        return None
+
+    obj0_values = np.array([float(row["obj0"]) for row in sample_best_rows], dtype=float)
+    obj1_values = np.array([float(row["obj1"]) for row in sample_best_rows], dtype=float)
+    return {
+        "mean_obj0": float(obj0_values.mean()),
+        "mean_obj1": float(obj1_values.mean()),
+        "num_samples_used": int(len(sample_best_rows)),
+    }
+
+
 def build_method_summary(
     method_name: str,
     pairs: List[Tuple[Path, Path]],
@@ -255,9 +295,10 @@ def build_method_summary(
         method_output_dir,
     )
 
-    overall_best = None
+    overall_best = build_mean_best_candidate(sample_best_rows)
+    best_single_candidate = None
     if sample_best_rows:
-        overall_best = min(sample_best_rows, key=lambda x: x["obj1"])
+        best_single_candidate = min(sample_best_rows, key=lambda x: x["obj1"])
 
     summary = {
         "method": method_name,
@@ -268,6 +309,7 @@ def build_method_summary(
         "smoothing_window": smooth_window,
         "num_scores": int(mean_curve.shape[1]),
         "overall_best": overall_best,
+        "best_single_candidate": best_single_candidate,
     }
 
     with (method_output_dir / "sample_best_under_obj0_lt_0.csv").open(
@@ -306,8 +348,10 @@ def build_method_summary(
     if overall_best is None:
         print(f"[{method_name}] No valid candidate found where obj0 < 0 in rank0_scores.")
     else:
-        print(f"[{method_name}] Overall best candidate (obj0 < 0 and lowest obj1):")
+        print(f"[{method_name}] Mean scores across per-sample best candidates:")
         print(json.dumps(overall_best, indent=2))
+        print(f"[{method_name}] Best single candidate (obj0 < 0 and lowest obj1):")
+        print(json.dumps(best_single_candidate, indent=2))
 
     summary["_downward_trend_curve"] = downward_trend_curve
     return summary
@@ -338,6 +382,29 @@ def build_summary(roots: List[Path], output_dir: Path, smooth_window: int) -> No
         json.dump(all_method_summaries, f, indent=2)
 
 
+def build_summary_for_input_folder(
+    input_folder: Path,
+    output_dir: Path,
+    smooth_window: int,
+) -> None:
+    model_name, explain_method, method_name = infer_model_and_method(input_folder)
+    pairs = discover_pairs_in_folder(input_folder)
+    if not pairs:
+        raise FileNotFoundError(
+            f"No objective_mins.txt + rank0_scores.txt pairs found in input folder: {input_folder}"
+        )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    summary = build_method_summary(method_name, pairs, output_dir, [input_folder], smooth_window)
+    summary["model_name"] = model_name
+    summary["explain_method"] = explain_method
+    summary["input_folder"] = str(input_folder)
+    summary.pop("_downward_trend_curve", None)
+
+    with (output_dir / "summary_all_methods.json").open("w", encoding="utf-8") as f:
+        json.dump([summary], f, indent=2)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -346,15 +413,25 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
+        "--input-folder",
+        help=(
+            "Single explain-method folder to process, for example output/vgg16/integrated_gradients. "
+            "The script will infer model name and explain method from the path."
+        ),
+    )
+    parser.add_argument(
         "--roots",
         nargs="+",
         default=["output"],
-        help="Root folders to search recursively.",
+        help="Root folders to search recursively when --input-folder is not provided.",
     )
     parser.add_argument(
         "--output-dir",
-        default="processed_results",
-        help="Directory to write plots and summary files.",
+        default=None,
+        help=(
+            "Directory to write plots and summary files. If omitted and --input-folder is used, "
+            "defaults to result_process_<model>. Otherwise defaults to processed_results."
+        ),
     )
     parser.add_argument(
         "--smooth-window",
@@ -367,8 +444,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.input_folder:
+        input_folder = Path(args.input_folder)
+        model_name, _, _ = infer_model_and_method(input_folder)
+        output_dir = Path(args.output_dir) if args.output_dir else Path(f"result_process_{model_name}")
+        build_summary_for_input_folder(input_folder, output_dir, args.smooth_window)
+        return
+
     roots = [Path(p) for p in args.roots]
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir) if args.output_dir else Path("processed_results")
     build_summary(roots, output_dir, args.smooth_window)
 
 

@@ -103,6 +103,9 @@ def get_gradcam_target_layer(model, model_name):
 
     if model_name.startswith("vit"):
         return [model.encoder.layers[-1].ln_1], _vit_reshape_transform
+    
+    if model_name.startswith("densenet"):
+        return [model.features[-1]], None
 
     raise ValueError(f"Grad-CAM target layer is not configured for model {model_name}")
 
