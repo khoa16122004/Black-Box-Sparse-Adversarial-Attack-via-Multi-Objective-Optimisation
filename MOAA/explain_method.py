@@ -2,7 +2,6 @@ import torch
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from pytorch_grad_cam.utils.image import show_cam_on_image
-from typing import Optional
 
 
 
@@ -87,46 +86,28 @@ def integrated_gradients(model, input_tensor, target_class=None, steps=100, base
     return saliency.detach(), output_logits
 
 
-def _vit_reshape_transform(tensor, height: Optional[int] = None, width: Optional[int] = None):
-    """Reshape ViT tokens to feature map with optional manual grid override."""
-    if tensor.ndim != 3:
-        raise ValueError(f"Expected ViT activations with shape [B, N, C], got {tuple(tensor.shape)}")
+def _vit_reshape_transform_vit_b_32(tensor, weight=7, height=7):
+    if model_name == "vit_b_32":
+        height = width = 7
+    elif model_name == "vit_b_16":
+        height = width = 14
 
-    # Drop class token: [B, 1 + HW, C] -> [B, HW, C]
     tensor = tensor[:, 1:, :]
-    num_tokens = int(tensor.size(1))
+    tensor = tensor.reshape(tensor.size(0), height, width, tensor.size(2))
+    return tensor.permute(0, 3, 1, 2)
+    
+def _vit_reshape_transform_vit_b_16(tensor, weight=14, height=14):
+    if model_name == "vit_b_32":
+        height = width = 7
+    elif model_name == "vit_b_16":
+        height = width = 14
 
-    if height is None and width is None:
-        side = int(num_tokens ** 0.5)
-        if side * side != num_tokens:
-            raise ValueError(
-                f"Cannot infer square token grid from {num_tokens} tokens. "
-                "Pass vit_height/vit_width explicitly."
-            )
-        height = side
-        width = side
-        print(f"Inferred ViT grid size: {height}x{width} from {num_tokens} tokens")
-        raise
-    elif height is None:
-        if width is None or width <= 0 or num_tokens % width != 0:
-            raise ValueError(f"Invalid width={width} for {num_tokens} tokens")
-        height = num_tokens // width
-    elif width is None:
-        if height <= 0 or num_tokens % height != 0:
-            raise ValueError(f"Invalid height={height} for {num_tokens} tokens")
-        width = num_tokens // height
-
-    if height * width != num_tokens:
-        raise ValueError(
-            f"height*width must equal token count after removing cls token: "
-            f"{height}*{width} != {num_tokens}"
-        )
-
+    tensor = tensor[:, 1:, :]
     tensor = tensor.reshape(tensor.size(0), height, width, tensor.size(2))
     return tensor.permute(0, 3, 1, 2)
 
 
-def get_gradcam_target_layer(model, model_name, vit_height: Optional[int] = None, vit_width: Optional[int] = None):
+def get_gradcam_target_layer(model, model_name):
     model_name = model_name.lower()
 
     if model_name.startswith("resnet"):
@@ -136,36 +117,10 @@ def get_gradcam_target_layer(model, model_name, vit_height: Optional[int] = None
         return [model.features[-1]], None
 
     if model_name.startswith("vit"):
-        # If not provided, infer from model metadata when available.
-        if vit_height is None or vit_width is None:
-            image_size = getattr(model, "image_size", None)
-            patch_size = getattr(model, "patch_size", None)
-
-            if image_size is not None and patch_size is not None:
-                if isinstance(image_size, tuple):
-                    image_h, image_w = int(image_size[0]), int(image_size[1])
-                else:
-                    image_h = image_w = int(image_size)
-
-                if isinstance(patch_size, tuple):
-                    patch_h, patch_w = int(patch_size[0]), int(patch_size[1])
-                else:
-                    patch_h = patch_w = int(patch_size)
-
-                if patch_h > 0 and patch_w > 0:
-                    inferred_h = image_h // patch_h
-                    inferred_w = image_w // patch_w
-                    vit_height = inferred_h if vit_height is None else vit_height
-                    vit_width = inferred_w if vit_width is None else vit_width
-
-        if vit_height is None and vit_width is None:
-            return [model.encoder.layers[-1].ln_1], _vit_reshape_transform
-
-        return [model.encoder.layers[-1].ln_1], lambda tensor: _vit_reshape_transform(
-            tensor,
-            height=vit_height,
-            width=vit_width,
-        )
+        IF model_name == "vit_b_32":
+            return [model.encoder.layers[-1].ln_1], _vit_reshape_transform_vit_b_32
+        elif model_name == "vit_b_16":
+            return [model.encoder.layers[-1].ln_1], _vit_reshape_transform_vit_b_16
     
     if model_name.startswith("densenet"):
         return [model.features[-1]], None
@@ -173,26 +128,14 @@ def get_gradcam_target_layer(model, model_name, vit_height: Optional[int] = None
     raise ValueError(f"Grad-CAM target layer is not configured for model {model_name}")
 
 
-def get_gradcam_map(
-    model,
-    model_name,
-    input_tensor,
-    target_class=None,
-    vit_height: Optional[int] = None,
-    vit_width: Optional[int] = None,
-):
+def get_gradcam_map(model, model_name, input_tensor, target_class=None):
     model.eval()
 
     with torch.no_grad():
         logits = model(input_tensor)
 
 
-    target_layers, reshape_transform = get_gradcam_target_layer(
-        model,
-        model_name,
-        vit_height=vit_height,
-        vit_width=vit_width,
-    )
+    target_layers, reshape_transform = get_gradcam_target_layer(model, model_name)
     
     if target_class is None:
         targets = None
