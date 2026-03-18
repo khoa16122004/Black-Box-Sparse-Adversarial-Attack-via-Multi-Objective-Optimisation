@@ -117,7 +117,7 @@ def get_gradcam_target_layer(model, model_name):
         return [model.features[-1]], None
 
     if model_name.startswith("vit"):
-        IF model_name == "vit_b_32":
+        if model_name == "vit_b_32":
             return [model.encoder.layers[-1].ln_1], _vit_reshape_transform_vit_b_32
         elif model_name == "vit_b_16":
             return [model.encoder.layers[-1].ln_1], _vit_reshape_transform_vit_b_16
