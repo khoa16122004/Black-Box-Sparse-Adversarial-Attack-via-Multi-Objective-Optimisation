@@ -1,4 +1,4 @@
-from MOAA.MOAA import Attack, Attack_Flexible_L0
+from MOAA.MOAA import Attack
 from LossFunctions import UnTargeted, Targeted
 import numpy as np
 import argparse
@@ -67,41 +67,100 @@ def resolve_image_path(raw_path, class_name, args):
 
 
 def save_pareto_chart(init_front0_fitness, final_front0_fitness, output_path):
-    fig, ax = plt.subplots(1, 1, figsize=(7, 6))
-    has_any_front = False
+    pf_init = np.array(init_front0_fitness, dtype=float)
+    pf_final = np.array(final_front0_fitness, dtype=float)
+    # Ensure shape
+    if pf_init.ndim == 1:
+        pf_init = pf_init[None, :]
+    if pf_final.ndim == 1:
+        pf_final = pf_final[None, :]
 
-    if len(init_front0_fitness) > 0:
-        pf_init = np.array(init_front0_fitness, dtype=float)
-        if pf_init.ndim == 1:
-            pf_init = pf_init[None, :]
-        ax.scatter(
-            pf_init[:, 0], pf_init[:, 1], c="red", s=60,
-            edgecolors="darkred", linewidths=0.5, label="Rank0 - Generation 1"
-        )
-        has_any_front = True
+    n_obj = pf_init.shape[1] if pf_init.shape[1] > 0 else pf_final.shape[1]
 
-    if len(final_front0_fitness) > 0:
-        pf_final = np.array(final_front0_fitness, dtype=float)
-        if pf_final.ndim == 1:
-            pf_final = pf_final[None, :]
-        ax.scatter(
-            pf_final[:, 0], pf_final[:, 1], c="blue", s=60,
-            edgecolors="navy", linewidths=0.5, label="Rank0 - Final Generation"
-        )
-        has_any_front = True
-
-    ax.set_title("Pareto Front Overlay: Gen 1 vs Final")
-    ax.set_xlabel("Objective 0 (loss)")
-    ax.set_ylabel("Objective 1 (intersection)")
-    ax.grid(True, alpha=0.3)
-    if has_any_front:
-        ax.legend(loc="best")
+    # 2D scatter
+    if n_obj == 2:
+        fig, ax = plt.subplots(1, 1, figsize=(7, 6))
+        has_any_front = False
+        if pf_init.shape[0] > 0:
+            ax.scatter(pf_init[:, 0], pf_init[:, 1], c="red", s=60,
+                       edgecolors="darkred", linewidths=0.5, label="Rank0 - Generation 1")
+            has_any_front = True
+        if pf_final.shape[0] > 0:
+            ax.scatter(pf_final[:, 0], pf_final[:, 1], c="blue", s=60,
+                       edgecolors="navy", linewidths=0.5, label="Rank0 - Final Generation")
+            has_any_front = True
+        ax.set_title("Pareto Front Overlay: Gen 1 vs Final")
+        ax.set_xlabel("Objective 0 (loss)")
+        ax.set_ylabel("Objective 1 (intersection)")
+        ax.grid(True, alpha=0.3)
+        if has_any_front:
+            ax.legend(loc="best")
+        else:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+    # 3D scatter
+    elif n_obj == 3:
+        from mpl_toolkits.mplot3d import Axes3D
+        fig = plt.figure(figsize=(8, 7))
+        ax = fig.add_subplot(111, projection='3d')
+        has_any_front = False
+        if pf_init.shape[0] > 0:
+            ax.scatter(pf_init[:, 0], pf_init[:, 1], pf_init[:, 2], c="red", s=60,
+                       edgecolors="darkred", linewidths=0.5, label="Rank0 - Generation 1")
+            has_any_front = True
+        if pf_final.shape[0] > 0:
+            ax.scatter(pf_final[:, 0], pf_final[:, 1], pf_final[:, 2], c="blue", s=60,
+                       edgecolors="navy", linewidths=0.5, label="Rank0 - Final Generation")
+            has_any_front = True
+        ax.set_title("Pareto Front Overlay: Gen 1 vs Final (3D)")
+        ax.set_xlabel("Objective 0 (loss)")
+        ax.set_ylabel("Objective 1 (intersection)")
+        ax.set_zlabel("Objective 2 (L2)")
+        if has_any_front:
+            ax.legend(loc="best")
+        else:
+            ax.text2D(0.5, 0.5, "No data", ha="center", va="center")
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+    # More than 3 objectives: plot all pairs
+    elif n_obj > 3:
+        pairs = [(i, j) for i in range(n_obj) for j in range(i+1, n_obj)]
+        n_pairs = len(pairs)
+        fig, axes = plt.subplots(1, n_pairs, figsize=(7*n_pairs, 6))
+        if n_pairs == 1:
+            axes = [axes]
+        for idx, (i, j) in enumerate(pairs):
+            ax = axes[idx]
+            has_any_front = False
+            if pf_init.shape[0] > 0:
+                ax.scatter(pf_init[:, i], pf_init[:, j], c="red", s=60,
+                           edgecolors="darkred", linewidths=0.5, label="Rank0 - Gen 1")
+                has_any_front = True
+            if pf_final.shape[0] > 0:
+                ax.scatter(pf_final[:, i], pf_final[:, j], c="blue", s=60,
+                           edgecolors="navy", linewidths=0.5, label="Rank0 - Final Gen")
+                has_any_front = True
+            ax.set_xlabel(f"Objective {i}")
+            ax.set_ylabel(f"Objective {j}")
+            ax.set_title(f"Pareto Front: Obj{i} vs Obj{j}")
+            ax.grid(True, alpha=0.3)
+            if has_any_front:
+                ax.legend(loc="best")
+            else:
+                ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
     else:
+        # fallback: no data
+        fig, ax = plt.subplots(1, 1, figsize=(7, 6))
         ax.text(0.5, 0.5, "No data", ha="center", va="center")
-
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
 
 
 def save_rank0_artifacts(sample_dir, result, base_model, model_name, normalize_transform, device,
@@ -144,14 +203,19 @@ def save_rank0_artifacts(sample_dir, result, base_model, model_name, normalize_t
         adv_imgs = np.zeros((0, *clean_img.shape), dtype=np.float32)
         adv_maps = np.zeros((0, clean_map.shape[0], clean_map.shape[1]), dtype=np.float32)
 
+    # Determine number of objectives
+    n_obj = 0
+    if len(front0_fitness) > 0:
+        fit0 = front0_fitness[0]
+        n_obj = len(fit0)
+    header = ["idx", "pred_label"] + [f"obj{i}" for i in range(n_obj)]
     with open(os.path.join(sample_dir, "rank0_scores.txt"), "w", encoding="utf-8") as f:
-        f.write("idx pred_label obj0 obj1\n")
+        f.write(" ".join(header) + "\n")
         for idx in range(len(front0_imgs)):
-            fit = front0_fitness[idx] if idx < len(front0_fitness) else [np.nan, np.nan]
+            fit = front0_fitness[idx] if idx < len(front0_fitness) else [np.nan]*n_obj
             pred = adversarial_labels[idx] if idx < len(adversarial_labels) else -1
-            obj0 = float(fit[0]) if len(fit) > 0 else float("nan")
-            obj1 = float(fit[1]) if len(fit) > 1 else float("nan")
-            f.write(f"{idx} {pred} {obj0:.8f} {obj1:.8f}\n")
+            line = [str(idx), str(pred)] + [f"{float(fit[i]):.8f}" if i < len(fit) else "nan" for i in range(n_obj)]
+            f.write(" ".join(line) + "\n")
 
             plt.imsave(os.path.join(rank0_dir, f"adv_{idx:03d}.png"), adv_imgs[idx])
             plt.imsave(os.path.join(rank0_dir, f"map_{idx:03d}.png"), adv_maps[idx], cmap="inferno")
@@ -195,6 +259,7 @@ def main(args):
         else:
             loss = UnTargeted(model, y_true, to_pytorch=True)
 
+
         objective2_fn = build_intersection_objective(
             base_model=base_model,
             model_name=args.model_name,
@@ -205,6 +270,12 @@ def main(args):
             explain_method=args.explain_method,
             ig_steps=args.ig_steps,
         )
+
+        def objective3_fn(x_adv_hwc):
+            return np.linalg.norm(x_adv_hwc - x_test)
+        def objective3_batch(x_adv_bhwc):
+            return [np.linalg.norm(x_adv - x_test) for x_adv in x_adv_bhwc]
+        objective3_fn.batch = objective3_batch
 
         result_path = os.path.join(sample_dir, "result.npy")
         params = {
@@ -223,12 +294,17 @@ def main(args):
             "verbose": args.verbose,
             "print_every": args.print_every,
             "objective2_fn": objective2_fn,
+            "objective3_fn": objective3_fn,
         }
 
         if args.attack_algo == "boaa":
             attack = Attack(params)
         elif args.attack_algo == "flexl0_boaa":
+            from MOAA.MOAA import Attack_Flexible_L0
             attack = Attack_Flexible_L0(params)
+        elif args.attack_algo == "tripoaa":
+            from MOAA.MOAA_trip import AttackTrip
+            attack = AttackTrip(params)
         else:
             raise ValueError(f"Unsupported attack_algo: {args.attack_algo}")
 
@@ -240,7 +316,7 @@ def main(args):
         if fitness_process.size > 0:
             if fitness_process.ndim == 1:
                 fitness_process = fitness_process[None, :]
-            np.savetxt(mins_txt_path, fitness_process[:, :2], fmt="%.8f")
+            np.savetxt(mins_txt_path, fitness_process[:, :3], fmt="%.8f")
         else:
             with open(mins_txt_path, "w", encoding="utf-8") as f:
                 f.write("")

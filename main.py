@@ -1,5 +1,5 @@
 # from ProposedMethod.QueryEfficient.Scratch import Attack
-from MOAA.MOAA import Attack_Flexible_L0
+from MOAA.MOAA import Attack
 from LossFunctions import UnTargeted, Targeted
 import numpy as np
 import argparse
@@ -243,59 +243,137 @@ def visualize_attack_result(save_path, x_clean=None, base_model=None, model_name
         ax_curve_loss.set_title("Objective 0 over iterations")
         ax_curve_dist.set_title("Objective 1 over iterations")
 
-    # --- Pareto fronts overlaid: generation 1 (red) and final generation (blue) ---
+    # --- Pareto front visualization: auto for 2D, 3D, or all pairs ---
     init_front0_fitness = result.get("init_front0_fitness", [])
-    ax_pareto = axes[-1, 0]
-    axes[-1, 1].axis("off")
-
-    has_any_front = False
-    if len(init_front0_fitness) > 0:
-        pf_init = np.array(init_front0_fitness, dtype=float)
-        if pf_init.ndim == 1:
-            pf_init = pf_init[None, :]
-        ax_pareto.scatter(
-            pf_init[:, 0], pf_init[:, 1], c="red", s=60, zorder=3,
-            edgecolors="darkred", linewidths=0.5, label="Rank0 - Generation 1"
-        )
-        has_any_front = True
-
-    if len(front0_fitness) > 0:
-        pf_final = np.array(front0_fitness, dtype=float)
-        if pf_final.ndim == 1:
-            pf_final = pf_final[None, :]
-        ax_pareto.scatter(
-            pf_final[:, 0], pf_final[:, 1], c="blue", s=60, zorder=3,
-            edgecolors="navy", linewidths=0.5, label="Rank0 - Final Generation"
-        )
-        has_any_front = True
-
-    ax_pareto.set_xlabel("Objective 0 (loss)")
-    ax_pareto.set_ylabel("Objective 1 (intersection)")
-    ax_pareto.set_title("Pareto Front Overlay: Gen 1 vs Final")
-    ax_pareto.grid(True, alpha=0.3)
-
-    if has_any_front:
-        ax_pareto.legend(loc="best")
-    else:
-        ax_pareto.text(0.5, 0.5, "No data", ha="center", va="center")
+    front0_fitness = result.get("front0_fitness", [])
+    pf_init = np.array(init_front0_fitness, dtype=float)
+    pf_final = np.array(front0_fitness, dtype=float)
+    if pf_init.ndim == 1:
+        pf_init = pf_init[None, :]
+    if pf_final.ndim == 1:
+        pf_final = pf_final[None, :]
+    n_obj = pf_init.shape[1] if pf_init.shape[1] > 0 else pf_final.shape[1]
     meta = (
         f"success={result.get('success')} | queries={result.get('queries')} | "
         f"true={result.get('true_label')} | front0={len(front0_imgs)}"
     )
-    fig.suptitle(meta)
-    fig.tight_layout()
-
-    if output_path:
-        out_dir = os.path.dirname(output_path)
-        if out_dir:
-            os.makedirs(out_dir, exist_ok=True)
-        fig.savefig(output_path, dpi=150, bbox_inches="tight")
-        print(f"Saved visualization to: {output_path}")
-
-    if show_plot:
-        plt.show()
+    # 2D
+    if n_obj == 2:
+        fig_pareto, ax = plt.subplots(1, 1, figsize=(7, 6))
+        has_any_front = False
+        if pf_init.shape[0] > 0:
+            ax.scatter(pf_init[:, 0], pf_init[:, 1], c="red", s=60,
+                       edgecolors="darkred", linewidths=0.5, label="Rank0 - Generation 1")
+            has_any_front = True
+        if pf_final.shape[0] > 0:
+            ax.scatter(pf_final[:, 0], pf_final[:, 1], c="blue", s=60,
+                       edgecolors="navy", linewidths=0.5, label="Rank0 - Final Generation")
+            has_any_front = True
+        ax.set_title("Pareto Front Overlay: Gen 1 vs Final")
+        ax.set_xlabel("Objective 0 (loss)")
+        ax.set_ylabel("Objective 1 (intersection)")
+        ax.grid(True, alpha=0.3)
+        if has_any_front:
+            ax.legend(loc="best")
+        else:
+            ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        fig_pareto.suptitle(meta)
+        fig_pareto.tight_layout()
+        if output_path:
+            out_dir = os.path.dirname(output_path)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+            fig_pareto.savefig(output_path, dpi=150, bbox_inches="tight")
+            print(f"Saved visualization to: {output_path}")
+        if show_plot:
+            plt.show()
+        else:
+            plt.close(fig_pareto)
+    elif n_obj == 3:
+        from mpl_toolkits.mplot3d import Axes3D
+        fig_pareto = plt.figure(figsize=(8, 7))
+        ax = fig_pareto.add_subplot(111, projection='3d')
+        has_any_front = False
+        if pf_init.shape[0] > 0:
+            ax.scatter(pf_init[:, 0], pf_init[:, 1], pf_init[:, 2], c="red", s=60,
+                       edgecolors="darkred", linewidths=0.5, label="Rank0 - Generation 1")
+            has_any_front = True
+        if pf_final.shape[0] > 0:
+            ax.scatter(pf_final[:, 0], pf_final[:, 1], pf_final[:, 2], c="blue", s=60,
+                       edgecolors="navy", linewidths=0.5, label="Rank0 - Final Generation")
+            has_any_front = True
+        ax.set_title("Pareto Front Overlay: Gen 1 vs Final (3D)")
+        ax.set_xlabel("Objective 0 (loss)")
+        ax.set_ylabel("Objective 1 (intersection)")
+        ax.set_zlabel("Objective 2 (L2)")
+        if has_any_front:
+            ax.legend(loc="best")
+        else:
+            ax.text2D(0.5, 0.5, "No data", ha="center", va="center")
+        fig_pareto.suptitle(meta)
+        fig_pareto.tight_layout()
+        if output_path:
+            out_dir = os.path.dirname(output_path)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+            fig_pareto.savefig(output_path, dpi=150, bbox_inches="tight")
+            print(f"Saved visualization to: {output_path}")
+        if show_plot:
+            plt.show()
+        else:
+            plt.close(fig_pareto)
+    elif n_obj > 3:
+        pairs = [(i, j) for i in range(n_obj) for j in range(i+1, n_obj)]
+        n_pairs = len(pairs)
+        fig_pareto, axes = plt.subplots(1, n_pairs, figsize=(7*n_pairs, 6))
+        if n_pairs == 1:
+            axes = [axes]
+        for idx, (i, j) in enumerate(pairs):
+            ax = axes[idx]
+            has_any_front = False
+            if pf_init.shape[0] > 0:
+                ax.scatter(pf_init[:, i], pf_init[:, j], c="red", s=60,
+                           edgecolors="darkred", linewidths=0.5, label="Rank0 - Gen 1")
+                has_any_front = True
+            if pf_final.shape[0] > 0:
+                ax.scatter(pf_final[:, i], pf_final[:, j], c="blue", s=60,
+                           edgecolors="navy", linewidths=0.5, label="Rank0 - Final Gen")
+                has_any_front = True
+            ax.set_xlabel(f"Objective {i}")
+            ax.set_ylabel(f"Objective {j}")
+            ax.set_title(f"Pareto Front: Obj{i} vs Obj{j}")
+            ax.grid(True, alpha=0.3)
+            if has_any_front:
+                ax.legend(loc="best")
+            else:
+                ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        fig_pareto.suptitle(meta)
+        fig_pareto.tight_layout()
+        if output_path:
+            out_dir = os.path.dirname(output_path)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+            fig_pareto.savefig(output_path, dpi=150, bbox_inches="tight")
+            print(f"Saved visualization to: {output_path}")
+        if show_plot:
+            plt.show()
+        else:
+            plt.close(fig_pareto)
     else:
-        plt.close(fig)
+        fig_pareto, ax = plt.subplots(1, 1, figsize=(7, 6))
+        ax.text(0.5, 0.5, "No data", ha="center", va="center")
+        fig_pareto.suptitle(meta)
+        fig_pareto.tight_layout()
+        if output_path:
+            out_dir = os.path.dirname(output_path)
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+            fig_pareto.savefig(output_path, dpi=150, bbox_inches="tight")
+            print(f"Saved visualization to: {output_path}")
+        if show_plot:
+            plt.show()
+        else:
+            plt.close(fig_pareto)
 
 
 if __name__ == "__main__":
@@ -340,6 +418,10 @@ if __name__ == "__main__":
                         help="which explain map method to use")
     parser.add_argument("--ig_steps", type=int, default=5,
                         help="number of steps for integrated gradients")
+    parser.add_argument("--attack_algo", type=str, default="boaa", choices=[
+        "boaa",
+        "tripoaa"
+    ], help="choose attack algorithm: boaa, flexl0_boaa, tripoaa")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -378,6 +460,7 @@ if __name__ == "__main__":
     else:
         loss = UnTargeted(model, y_true, to_pytorch=True)
 
+
     objective2_fn = build_intersection_objective(
         base_model=base_model,
         model_name=args.model_name,
@@ -389,28 +472,43 @@ if __name__ == "__main__":
         ig_steps=args.ig_steps,
     )
 
+    def objective3_fn(x_adv_hwc):
+        return np.linalg.norm(x_adv_hwc - x_test)
+    def objective3_batch(x_adv_bhwc):
+        return [np.linalg.norm(x_adv - x_test) for x_adv in x_adv_bhwc]
+    objective3_fn.batch = objective3_batch
+
     save_dir = os.path.dirname(args.save_directory)
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
 
     params = {
-        "x": x_test, # Image is assume to be numpy array of shape height * width * 3
-        "eps": args.eps, # number of changed pixels
-        "iterations": 1000 // 2, # model query budget / population size
-        "pc": pc, # crossover parameter
-        "pm": pm, # mutation parameter
-        "pop_size": 50, # population size
+        "x": x_test,
+        "eps": args.eps,
+        "iterations": 1000 // 2,
+        "pc": pc,
+        "pm": pm,
+        "pop_size": 50,
         "zero_probability": 0.3,
-        "include_dist": True, # objective-2 is intersection score (minimize)
-        "max_dist": 1e-5, # threshold on intersection objective to declare early success
-        "p_size": 2.0, # Perturbation values have {-p_size, p_size, 0}. Change this if you want smaller perturbations.
-        "tournament_size": 4, #Number of parents compared to generate new solutions, cannot be larger than the population
+        "include_dist": True,
+        "max_dist": 1e-5,
+        "p_size": 2.0,
+        "tournament_size": 4,
         "save_directory": args.save_directory,
         "verbose": args.verbose,
         "print_every": args.print_every,
         "objective2_fn": objective2_fn,
+        "objective3_fn": objective3_fn,
     }
-    attack = Attack_Flexible_L0(params)
+
+    if hasattr(args, "attack_algo") and args.attack_algo == "tripoaa":
+        from MOAA.MOAA_trip import AttackTrip
+        attack = AttackTrip(params)
+    elif hasattr(args, "attack_algo") and args.attack_algo == "boaa":
+        from MOAA.MOAA import Attack
+        attack = Attack(params)
+    else:
+        attack = Attack(params)
     attack.attack(loss)
 
     if args.visualize:
