@@ -87,21 +87,11 @@ def integrated_gradients(model, input_tensor, target_class=None, steps=100, base
 
 
 def _vit_reshape_transform_vit_b_32(tensor, weight=7, height=7):
-    if model_name == "vit_b_32":
-        height = width = 7
-    elif model_name == "vit_b_16":
-        height = width = 14
-
     tensor = tensor[:, 1:, :]
     tensor = tensor.reshape(tensor.size(0), height, width, tensor.size(2))
     return tensor.permute(0, 3, 1, 2)
     
 def _vit_reshape_transform_vit_b_16(tensor, weight=14, height=14):
-    if model_name == "vit_b_32":
-        height = width = 7
-    elif model_name == "vit_b_16":
-        height = width = 14
-
     tensor = tensor[:, 1:, :]
     tensor = tensor.reshape(tensor.size(0), height, width, tensor.size(2))
     return tensor.permute(0, 3, 1, 2)
