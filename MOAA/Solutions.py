@@ -19,6 +19,7 @@ class Solution:
         self.crowding_distance = None
 
         self.loss = None
+        self.pred_label = -1
         self.p_size = p_size
 
     def copy(self):
@@ -41,7 +42,14 @@ class Solution:
         img_adv = self.generate_image()
         fs = loss_function(img_adv)
         self.is_adversarial = fs[0]  # Assume first element is boolean always
-        self.fitnesses = fs[1:]
+        if len(fs) > 2:
+            self.pred_label = int(fs[2])
+        elif hasattr(loss_function, "get_label"):
+            self.pred_label = int(loss_function.get_label(img_adv))
+        else:
+            self.pred_label = -1
+
+        self.fitnesses = [float(fs[1])]
         if include_dist:
             if objective2_fn is None:
                 raise ValueError("objective2_fn is required: L2 objective has been removed")

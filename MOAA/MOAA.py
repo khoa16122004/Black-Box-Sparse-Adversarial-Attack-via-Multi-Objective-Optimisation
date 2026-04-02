@@ -65,6 +65,12 @@ class Population:
             fs = fs_batch[idx]
             pi.is_adversarial = bool(fs[0])
             pi.fitnesses = np.array([float(fs[1]), float(obj2_batch[idx])], dtype=float)
+            if len(fs) > 2:
+                pi.pred_label = int(fs[2])
+            elif hasattr(self.loss_function, "get_label"):
+                pi.pred_label = int(self.loss_function.get_label(imgs_adv[idx]))
+            else:
+                pi.pred_label = -1
             pi.loss = float(fs[1])
             pi.l0 = pi.l0_distance(pi.generate_image())
 
